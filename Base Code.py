@@ -63,10 +63,15 @@ for i in Items:
 
 g = {}
 rho = {}
+gamma = {}
 for i in Items:
     rho[i.ID] = model.addVar(vtype=gp.GRB.BINARY, name="rho_{}".format(i.ID))
     g[i.ID] = model.addVar(vtype=gp.GRB.BINARY, name="g_{}".format(i.ID))
+    gamma[i.ID] = model.addVar(vtype=gp.GRB.BINARY, name="gamma_{}".format(i.ID))
 
+radioactive = {}
+for bin in Bins:
+    radioactive[bin.ID] = model.addVar(vtype=gp.GRB.BINARY, name="radioactive_{}".format(bin.ID))
 
 B1 = {}
 B2 = {}
@@ -81,7 +86,6 @@ y = {}
 for i in Items:
     x[i.ID] = model.addVar(lb=0, vtype=gp.GRB.CONTINUOUS, name="x_{}".format(i.ID))
     y[i.ID] = model.addVar(lb=0, vtype=gp.GRB.CONTINUOUS, name="y_{}".format(i.ID))
-
 
 
 
@@ -118,17 +122,69 @@ for i in Items:
     grounding[i.ID] = model.addConstr(y[i.ID] <= 1000 * (1-g[i.ID]), name="grounding_{}".format(i.ID))
 
 bcon = {}
+rcon = {}
 for i in Items:
     for j in Items:
         for bin in Bins:
             if i.ID != j.ID:
                 bcon[i.ID, j.ID, bin.ID] = model.addConstr(y[i.ID] - (y[j.ID] + j.height * (1 - rho[j.ID]) + j.length * rho[j.ID]) <= 1000 * (3 - B1[i.ID, j.ID] - p[i.ID, bin.ID] - p[j.ID, bin.ID]), name="bcon_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                rcon[i.ID, j.ID, bin.ID] = model.addConstr(y[i.ID] - (y[j.ID] + j.height * (1 - rho[j.ID]) + j.length * rho[j.ID]) <= 1000 * (3 - B2[i.ID, j.ID] - p[i.ID, bin.ID] - p[j.ID, bin.ID]), name="rcon_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+
+bcon2 = {}
+rcon2 = {}
+for i in Items:
+    for j in Items:
+        for bin in Bins:
+            if i.ID != j.ID:
+                bcon2[i.ID, j.ID, bin.ID] = model.addConstr(-y[i.ID] + (y[j.ID] + j.height * (1 - rho[j.ID]) + j.length * rho[j.ID]) <= 1000 * (3 - B1[i.ID, j.ID] - p[i.ID, bin.ID] - p[j.ID, bin.ID]), name="bcon2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                rcon2[i.ID, j.ID, bin.ID] = model.addConstr(-y[i.ID] + (y[j.ID] + j.height * (1 - rho[j.ID]) + j.length * rho[j.ID]) <= 1000 * (3 - B2[i.ID, j.ID] - p[i.ID, bin.ID] - p[j.ID, bin.ID]), name="rcon2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+
+cornerl = {}
+corneru = {}
+for i in Items:
+    for bin in Bins:
+        if bin.b>0:
+            cornerl[i.ID, bin.ID] = model.addConstr(y[i.ID]>=-bin.b/bin.a * x[i.ID] + bin.b - (1-p[i.ID, bin.ID])*(1000000), name="corner_{}_{}".format(i.ID, bin.ID))
+            corneru[i.ID, bin.ID] = model.addConstr(y[i.ID]<=-bin.b/bin.a * x[i.ID] + bin.b + (2-p[i.ID, bin.ID] - gamma[i.ID])*(1000000), name="corner_{}_{}".format(i.ID, bin.ID))
 
 
+left = {}
+left2 = {}
+for i in Items:
+    for j in Items:
+        for bin in Bins:
+            if i.ID != j.ID:
+                left[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] <= 1000000 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID]), name="left_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                left2[i.ID, j.ID, bin.ID] = model.addConstr(-x[j.ID]-j.length*(1-rho[j.ID]) - j.height*rho[j.ID] + x[i.ID] <= 1000000 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID]), name="left2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
 
+right = {}
+right2 = {}
+for i in Items:
+    for j in Items:
+        for bin in Bins:
+            if i.ID != j.ID:
+                right[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] - i.length*(1-rho[i.ID]) - i.height*rho[i.ID] <= 1000000 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID]), name="right_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                right2[i.ID, j.ID, bin.ID] = model.addConstr(x[i.ID] + i.length*(1-rho[i.ID]) + i.height*rho[i.ID] - x[j.ID] - j.length*(1-rho[j.ID]) - j.height*rho[j.ID] <= 1000000 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID]), name="right2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
 
+rotation = {}
+for i in Items:
+    if i.rotate == 0:
+        rotation[i.ID] = model.addConstr(rho[i.ID] == 0, name="rotation_{}".format(i.ID))
 
+fragile = {}
+for j in Items:
+    if j.fragile == 1:
+        fragile[j.ID] = model.addConstr(gp.quicksum(B1[i.ID, j.ID] + B2[i.ID, j.ID] for i in Items if i.ID != j.ID) == 0, name="fragile_{}".format(j.ID))
 
+radiation_activation = {}
+radiation_limiter = {}
+for bin in Bins:
+    radiation_activation[bin.ID] = model.addConstr(gp.quicksum(i.radioactive*p[i.ID, bin.ID] for i in Items) <= 1000 * radioactive[bin.ID], name="radiation_activation_{}".format(bin.ID))
+    radiation_limiter[bin.ID] = model.addConstr(gp.quicksum(i.perishable*p[i.ID, bin.ID] for i in Items) <= 1000 * (1-radioactive[bin.ID]), name="radiation_limiter_{}".format(bin.ID))
+
+feasibility = {}
+for i in Items:
+    feasibility[i.ID] = model.addConstr(gamma[i.ID] + gp.quicksum(B1[i.ID,j.ID] + B2[i.ID,j.ID] for j in Items if j.ID != i.ID) + 2 * g[i.ID] >= 2, name="feasibility_{}".format(i.ID))
 
 model.update()
 model.setParam("LogFile", "log_file")
@@ -144,11 +200,30 @@ for i in Items:
         if p[i.ID, bin.ID].X > 0.5:
             print("Item {} is assigned to Bin {}".format(i.ID, bin.ID))
             print("Item {}: x = {}, y = {}, rho = {}".format(i.ID, x[i.ID].X, y[i.ID].X, rho[i.ID].X))
+            for j in Items:
+                if i.ID != j.ID:
+                    if B1[i.ID, j.ID].X > 0.5:
+                        print("Item {} is above Item {}".format(i.ID, j.ID))
+                    if B2[i.ID, j.ID].X > 0.5:
+                        print("Item {} is above Item {}".format(i.ID, j.ID))
 
-for i in Items:
-    for j in Items:
-        if i.ID != j.ID:
-            if I[i.ID, j.ID].X > 0.5:
-                print("Item {} is to the left of Item {}".format(i.ID, j.ID))
-            if b[i.ID, j.ID].X > 0.5:
-                print("Item {} is below Item {}".format(i.ID, j.ID))
+
+
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+
+for bin in Bins:
+    if z[bin.ID].X > 0.5:
+        fig, ax = plt.subplots()
+        ax.set_xlim(0, bin.length)
+        ax.set_ylim(0, bin.height)
+        for i in Items:
+            if p[i.ID, bin.ID].X > 0.5:
+                rect = patches.Rectangle((x[i.ID].X, y[i.ID].X), i.length * (1 - rho[i.ID].X) + i.height * rho[i.ID].X, i.height * (1 - rho[i.ID].X) + i.length * rho[i.ID].X, edgecolor='black', facecolor='blue', alpha=0.5)
+                ax.add_patch(rect)
+                plt.text(x[i.ID].X + (i.length * (1 - rho[i.ID].X) + i.height * rho[i.ID].X)/2, y[i.ID].X + (i.height * (1 - rho[i.ID].X) + i.length * rho[i.ID].X)/2, str(i.ID), color='white', ha='center', va='center')
+        plt.title("Bin {}".format(bin.ID))
+        plt.xlabel("Length")
+        plt.ylabel("Height")
+        plt.grid()
+        plt.show()
