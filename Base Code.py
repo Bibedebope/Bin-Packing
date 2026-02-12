@@ -1,6 +1,6 @@
 import gurobipy as gp
 import pickle
-import numpy as np
+import os
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
@@ -178,7 +178,7 @@ for i in Items:
         for bin in Bins:
             if i.ID != j.ID:
                 left[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID, bin.ID]), name="left_{}_{}_{}".format(i.ID, j.ID, bin.ID))
-                left2[i.ID, j.ID, bin.ID] = model.addConstr(-x[j.ID]-j.length*(1-rho[j.ID]) - j.height*rho[j.ID] + x[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID, bin.ID]), name="left2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                left2[i.ID, j.ID, bin.ID] = model.addConstr(-x[j.ID]-j.length*(1-rho[j.ID]) - j.height*rho[j.ID] + x[i.ID]  + 0.00001 <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID, bin.ID]), name="left2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
     model.addConstr(gp.quicksum(gp.quicksum(B1[i.ID, j.ID, bin.ID] for j in Items if j.ID != i.ID) for bin in Bins) <= 1, name="left_b_{}".format(i.ID))
 
 right = {}
@@ -187,7 +187,7 @@ for i in Items:
     for j in Items:
         for bin in Bins:
             if i.ID != j.ID:
-                right[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] - i.length*(1-rho[i.ID]) - i.height*rho[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID, bin.ID]), name="right_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+                right[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]  + 0.00001 -x[i.ID] - i.length*(1-rho[i.ID]) - i.height*rho[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID, bin.ID]), name="right_{}_{}_{}".format(i.ID, j.ID, bin.ID))
                 right2[i.ID, j.ID, bin.ID] = model.addConstr(x[i.ID] + i.length*(1-rho[i.ID]) + i.height*rho[i.ID] - x[j.ID] - j.length*(1-rho[j.ID]) - j.height*rho[j.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID, bin.ID]), name="right2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
     model.addConstr(gp.quicksum(gp.quicksum(B2[i.ID, j.ID, bin.ID] for j in Items if j.ID != i.ID) for bin in Bins) <= 1, name="right_b_{}".format(i.ID))
 
@@ -237,9 +237,10 @@ model.optimize()
 model.write("model.sol")
 
 
+output_dir = "bin_plots"
+os.makedirs(output_dir, exist_ok=True)
 
 def item_color(item_id):
-    # tab20 has 20 distinct colors; modulo repeats if you have >20 items
     cmap = plt.get_cmap("tab20")
     return cmap(item_id % cmap.N)
 
@@ -251,9 +252,7 @@ for bin in Bins:
 
         # ---- draw the cut-out line if present ----
         if getattr(bin, "a", 0) > 0:
-            # optional: only draw if b is also >0 (typical triangular cut)
-            # if getattr(bin, "b", 0) > 0:
-            ax.plot([bin.a, 0], [0, bin.b], linewidth=2)  # line from (a,0) to (0,b)
+            ax.plot([bin.a, 0], [0, bin.b], linewidth=2)
 
         for i in Items:
             if p[i.ID, bin.ID].X > 0.5:
@@ -282,5 +281,11 @@ for bin in Bins:
         ax.set_xlabel("Length")
         ax.set_ylabel("Height")
         ax.grid(True)
+
+        # ---------- SAVE FIGURE ----------
+        filename = os.path.join(output_dir, f"bin_{bin.ID}.png")
+        plt.savefig(filename, dpi=200, bbox_inches="tight")
+        plt.close(fig)   # IMPORTANT: prevents memory leaks
+        print(f"Saved {filename}")
 
 plt.show()
