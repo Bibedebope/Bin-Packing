@@ -179,6 +179,7 @@ for i in Items:
             if i.ID != j.ID:
                 left[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID, bin.ID]), name="left_{}_{}_{}".format(i.ID, j.ID, bin.ID))
                 left2[i.ID, j.ID, bin.ID] = model.addConstr(-x[j.ID]-j.length*(1-rho[j.ID]) - j.height*rho[j.ID] + x[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B1[i.ID, j.ID, bin.ID]), name="left2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+    model.addConstr(gp.quicksum(gp.quicksum(B1[i.ID, j.ID, bin.ID] for j in Items if j.ID != i.ID) for bin in Bins) <= 1, name="left_b_{}".format(i.ID))
 
 right = {}
 right2 = {}
@@ -188,6 +189,7 @@ for i in Items:
             if i.ID != j.ID:
                 right[i.ID, j.ID, bin.ID] = model.addConstr(x[j.ID]-x[i.ID] - i.length*(1-rho[i.ID]) - i.height*rho[i.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID, bin.ID]), name="right_{}_{}_{}".format(i.ID, j.ID, bin.ID))
                 right2[i.ID, j.ID, bin.ID] = model.addConstr(x[i.ID] + i.length*(1-rho[i.ID]) + i.height*rho[i.ID] - x[j.ID] - j.length*(1-rho[j.ID]) - j.height*rho[j.ID] <= 301 * (3-p[i.ID, bin.ID] - p[j.ID, bin.ID] - B2[i.ID, j.ID, bin.ID]), name="right2_{}_{}_{}".format(i.ID, j.ID, bin.ID))
+    model.addConstr(gp.quicksum(gp.quicksum(B2[i.ID, j.ID, bin.ID] for j in Items if j.ID != i.ID) for bin in Bins) <= 1, name="right_b_{}".format(i.ID))
 
 for bin in Bins:
     for i in Items:
