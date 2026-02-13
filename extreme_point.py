@@ -472,7 +472,10 @@ Items_in_Bin = {k: [pi.item.ID for pi in p.placed_items] for k, p in packers.ite
 I_info_solution = {}
 for p in packers.values():
     for pi in p.placed_items:
-        I_info_solution[pi.item.ID] = [pi.x, pi.y, pi.width, pi.height]
+        I_info_solution[pi.item.ID] = [float(pi.x), float(pi.y), float(pi.width), float(pi.height)]
+
+# Sort by item ID (0-24)
+I_info_solution = dict(sorted(I_info_solution.items()))
 
 with open('bins_used.pickle', 'wb') as f:
     pickle.dump(bins_used, f)
